@@ -1,4 +1,4 @@
-# KidzDev Recyclable Scroll
+# KidzDev Unity Recyclable Scroll
 
 High-performance recyclable `ScrollRect` for Unity uGUI. Displays arbitrarily
 long lists by recycling a small pool of item views instead of instantiating one
@@ -14,7 +14,7 @@ Add via Package Manager → *Add package from git URL*, or edit
 `Packages/manifest.json`:
 
 ```
-https://github.com/knabsiraphop/kidzdev-recyclable-scroll.git#v0.1.0
+https://github.com/knabsiraphop/kidzdev-unity-recyclable-scroll.git#v0.1.0
 ```
 
 ## Features
@@ -27,7 +27,7 @@ https://github.com/knabsiraphop/kidzdev-recyclable-scroll.git#v0.1.0
 ### Planned
 
 - Addressables-native async item loading via
-  [kidzdev-addressables-toolkit](https://github.com/knabsiraphop/kidzdev-addressables-toolkit)
+  [kidzdev-unity-addressables-toolkit](https://github.com/knabsiraphop/kidzdev-unity-addressables-toolkit)
   (shipped as a separate optional assembly so the core stays dependency-free).
 
 ## Roadmap

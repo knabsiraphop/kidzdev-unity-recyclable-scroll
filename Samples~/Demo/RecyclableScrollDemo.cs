@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace KidzDev.RecyclableScroll.Samples
+namespace KidzDev.Unity.RecyclableScroll.Samples
 {
     /// <summary>
     /// Minimal demo data source: 1000 dummy string rows wired into a

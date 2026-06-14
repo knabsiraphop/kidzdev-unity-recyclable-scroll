@@ -1,6 +1,6 @@
 {
-  "name": "KidzDev.RecyclableScroll",
-  "rootNamespace": "KidzDev.RecyclableScroll",
+  "name": "KidzDev.Unity.RecyclableScroll",
+  "rootNamespace": "KidzDev.Unity.RecyclableScroll",
   "references": [
     "UnityEngine.UI"
   ],

@@ -1,4 +1,4 @@
-namespace KidzDev.RecyclableScroll
+namespace KidzDev.Unity.RecyclableScroll
 {
     /// <summary>
     /// Supplies data and binding logic to a <see cref="RecyclableScrollView"/>.

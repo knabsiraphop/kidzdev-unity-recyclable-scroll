@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace KidzDev.RecyclableScroll
+namespace KidzDev.Unity.RecyclableScroll
 {
     /// <summary>
     /// Base class for a recyclable list item view. Derive from this and override

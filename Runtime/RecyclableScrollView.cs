@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace KidzDev.RecyclableScroll
+namespace KidzDev.Unity.RecyclableScroll
 {
     // Build phases (incremental — only the scaffold exists today):
     //   Phase 1: linear layout, fixed item size, synchronous binding.
