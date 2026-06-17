@@ -1,11 +1,13 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace KidzDev.Unity.RecyclableScroll.Samples
 {
     /// <summary>
-    /// Minimal demo data source: 1000 dummy string rows wired into a
-    /// <see cref="RecyclableScrollView"/>. Shows the intended integration shape
-    /// even though the scroll engine itself is still a Phase 1 stub.
+    /// Minimal demo data source: a list of dummy string rows wired into a
+    /// <see cref="RecyclableScrollView"/>. Each recycled row's <see cref="Text"/> is
+    /// updated in <see cref="BindItem"/>, so scrolling shows live "Row N" content
+    /// from a small pool of reused item views.
     /// </summary>
     public class RecyclableScrollDemo : MonoBehaviour, IRecyclableDataSource
     {
@@ -30,8 +32,8 @@ namespace KidzDev.Unity.RecyclableScroll.Samples
                 return;
             }
 
+            // SetDataSource rebuilds the view; no separate Refresh call needed.
             scrollView.SetDataSource(this);
-            scrollView.Refresh();
         }
 
         // IRecyclableDataSource ------------------------------------------------
@@ -40,9 +42,9 @@ namespace KidzDev.Unity.RecyclableScroll.Samples
 
         public void BindItem(int index, RecyclableScrollItem item)
         {
-            // A real item view would expose a label/setter; for the demo we just
-            // log so the wiring is observable while the engine is a stub.
-            Debug.Log($"Bind item {index}: {_rows[index]} -> {item.name}");
+            var label = item.GetComponentInChildren<Text>();
+            if (label != null)
+                label.text = _rows[index];
         }
 
         public float GetItemSize(int index) => rowSize;

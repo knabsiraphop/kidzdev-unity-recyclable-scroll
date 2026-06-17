@@ -17,5 +17,12 @@ namespace KidzDev.Unity.RecyclableScroll
         /// data source has bound this item. Override to update visuals.
         /// </summary>
         protected virtual void OnBind() { }
+
+        /// <summary>
+        /// Internal bridge that lets the owning <see cref="RecyclableScrollView"/>
+        /// trigger the protected <see cref="OnBind"/> after the data source has bound
+        /// this item. Not part of the public API.
+        /// </summary>
+        internal void InvokeOnBind() => OnBind();
     }
 }
