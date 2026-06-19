@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace KidzDev.Unity.RecyclableScroll.Tests
 {
@@ -31,7 +32,7 @@ namespace KidzDev.Unity.RecyclableScroll.Tests
 
         public int ItemCount => _count;
 
-        public void BindItem(int index, RecyclableScrollItem item) => BoundIndices.Add(index);
+        public void BindItem(int index, GameObject item) => BoundIndices.Add(index);
 
         public float GetItemSize(int index) => _sizes != null ? _sizes[index] : _uniformSize;
     }

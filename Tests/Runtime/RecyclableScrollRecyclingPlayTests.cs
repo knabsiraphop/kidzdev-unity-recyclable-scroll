@@ -29,7 +29,7 @@ namespace KidzDev.Unity.RecyclableScroll.Tests.Play
 
             public readonly List<int> Bound = new List<int>();
             public int ItemCount => _count;
-            public void BindItem(int index, RecyclableScrollItem item) => Bound.Add(index);
+            public void BindItem(int index, GameObject item) => Bound.Add(index);
             public float GetItemSize(int index) => _size;
         }
 
@@ -61,14 +61,14 @@ namespace KidzDev.Unity.RecyclableScroll.Tests.Play
             var contentRT = (RectTransform)contentGO.transform;
 
             // Inactive template so Instantiate clones an inactive item.
-            var itemGO = new GameObject("Item", typeof(RectTransform), typeof(RecyclableScrollItem));
+            var itemGO = new GameObject("Item", typeof(RectTransform));
             itemGO.transform.SetParent(_root.transform, false);
             itemGO.SetActive(false);
 
             var view = svGO.AddComponent<RecyclableScrollView>();
             SetPrivate(view, "viewport", viewportRT);
             SetPrivate(view, "content", contentRT);
-            SetPrivate(view, "itemPrefab", itemGO.GetComponent<RecyclableScrollItem>());
+            SetPrivate(view, "itemPrefab", itemGO);
             SetPrivate(view, "orientation", orientation);
             return view;
         }

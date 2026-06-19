@@ -1,5 +1,6 @@
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using UnityEngine;
 
 namespace KidzDev.Unity.RecyclableScroll
 {
@@ -17,6 +18,6 @@ namespace KidzDev.Unity.RecyclableScroll
         /// The <paramref name="cancellationToken"/> is cancelled when the item scrolls out of
         /// view before binding finishes — observe it early to avoid wasted work.
         /// </summary>
-        UniTask BindItemAsync(int index, RecyclableScrollItem item, CancellationToken cancellationToken);
+        UniTask BindItemAsync(int index, GameObject item, CancellationToken cancellationToken);
     }
 }

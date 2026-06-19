@@ -42,7 +42,7 @@ namespace KidzDev.Unity.RecyclableScroll
         [Header("References")]
         [SerializeField] private RectTransform viewport;
         [SerializeField] private RectTransform content;
-        [SerializeField] private RecyclableScrollItem itemPrefab;
+        [SerializeField] private GameObject itemPrefab;
 
         [Header("Layout")]
         [SerializeField] private Orientation orientation = Orientation.Vertical;
@@ -71,9 +71,10 @@ namespace KidzDev.Unity.RecyclableScroll
         private readonly Dictionary<int, RecyclableScrollItem> _active = new Dictionary<int, RecyclableScrollItem>();
         private readonly Dictionary<int, CancellationTokenSource> _pendingBinds = new Dictionary<int, CancellationTokenSource>();
         private readonly Stack<RecyclableScrollItem> _pool = new Stack<RecyclableScrollItem>();
-        private readonly List<int> _scratch = new List<int>();
+        private readonly List<int> _indicesToRecycle = new List<int>();
 
         private IRecyclableDataSource _dataSource;
+        private IItemInstantiator _instantiator;
         private int _firstActive;
         private int _lastActive = -1;
 
@@ -81,7 +82,7 @@ namespace KidzDev.Unity.RecyclableScroll
         private float _scrollPos;
         private float _velocity;
         private bool _dragging;
-        private bool _dragValid;
+        private bool _dragPointerValid;
         private float _pointerStartMain;
         private float _scrollStartPos;
         private float _prevScrollPos;
@@ -94,6 +95,15 @@ namespace KidzDev.Unity.RecyclableScroll
         /// <summary>Current scroll offset along the main axis, from the leading edge.</summary>
         public float ScrollPosition => _scrollPos;
 
+        /// <summary>Maximum scroll offset; zero when the content fits entirely within the viewport.</summary>
+        public float MaxScrollPosition => MaxScroll;
+
+        /// <summary>True when the scroll is at or before the leading edge.</summary>
+        public bool IsAtStart => _scrollPos <= 0f;
+
+        /// <summary>True when the scroll is at or past the trailing edge, or when content fits in the viewport.</summary>
+        public bool IsAtEnd => _layout == null || _scrollPos >= MaxScroll - 0.5f;
+
         private void Awake()
         {
             if (padding == null) padding = new RectOffset();
@@ -102,17 +112,52 @@ namespace KidzDev.Unity.RecyclableScroll
         private void OnDestroy()
         {
             foreach (CancellationTokenSource cts in _pendingBinds.Values)
+            {
                 cts.Cancel();
+                cts.Dispose();
+            }
             _pendingBinds.Clear();
+
+            if (_instantiator != null)
+            {
+                foreach (RecyclableScrollItem item in _pool)
+                    _instantiator.Destroy(item.gameObject);
+                foreach (KeyValuePair<int, RecyclableScrollItem> kv in _active)
+                    _instantiator.Destroy(kv.Value.gameObject);
+            }
         }
 
         /// <summary>Assign the data source that feeds this view; resets to the top and rebuilds.</summary>
         public void SetDataSource(IRecyclableDataSource dataSource)
         {
             _dataSource = dataSource;
+            _instantiator = dataSource is IItemInstantiator i && i.IsEnabled ? i : null;
             _scrollPos = 0f;
             _velocity = 0f;
             Refresh();
+        }
+
+        /// <summary>
+        /// Assign the data source and an explicit instantiator in one call. The instantiator
+        /// takes precedence over any <see cref="IItemInstantiator"/> the data source might
+        /// implement.
+        /// </summary>
+        public void SetDataSource(IRecyclableDataSource dataSource, IItemInstantiator instantiator)
+        {
+            _instantiator = instantiator is { IsEnabled: true } ? instantiator : null;
+            _dataSource = dataSource;
+            _scrollPos = 0f;
+            _velocity = 0f;
+            Refresh();
+        }
+
+        /// <summary>
+        /// Override the item instantiator without replacing the data source. Pass <c>null</c>
+        /// to revert to the default <c>Instantiate(itemPrefab)</c> behaviour.
+        /// </summary>
+        public void SetInstantiator(IItemInstantiator instantiator)
+        {
+            _instantiator = instantiator is { IsEnabled: true } ? instantiator : null;
         }
 
         /// <summary>Rebuild the visible window from scratch against the current data source.</summary>
@@ -122,7 +167,9 @@ namespace KidzDev.Unity.RecyclableScroll
 
             EnsureLayout();
             ApplyContentLayout();
-            // Force layout so the viewport rect is accurate before Rebuild reads the cross-axis size.
+            // Deliberate full canvas flush: Rebuild reads the viewport's cross-axis size below,
+            // which is only accurate once pending layout has been applied. Cost is acceptable
+            // here because Refresh runs on data-source changes, not per frame.
             Canvas.ForceUpdateCanvases();
 
             _layout.Rebuild(_dataSource, BuildMetrics());
@@ -182,6 +229,15 @@ namespace KidzDev.Unity.RecyclableScroll
             crossExtent: Mathf.Max(0f, ViewportCross - CrossLeadingPad - CrossTrailingPad));
 
         // --- virtual-index helpers (loop) ------------------------------------
+        //
+        // Index vocabulary used throughout the loop path:
+        //   data index    — the real index into the data source, always in [0, Count).
+        //   virtual index — an unbounded index that encodes the lap (which copy of the list)
+        //                   plus the data index: virtual = lap * Count + data. May be negative
+        //                   or exceed Count. The realized window (_firstActive/_lastActive) and
+        //                   _active keys are virtual indices when looping.
+        //   physical      — alias for data index when disambiguating from virtual in placement.
+        // ToDataIndex collapses a virtual index back to its data index.
 
         // Loop: split a possibly-out-of-range offset into a lap (which full copy of the
         // list) and a physical offset within one copy, then combine to a virtual index.
@@ -195,7 +251,7 @@ namespace KidzDev.Unity.RecyclableScroll
         }
 
         // Virtual index → data index (wraps any integer into [0, count)).
-        private int DataIndex(int virtualIndex)
+        private int ToDataIndex(int virtualIndex)
         {
             int count = _layout.Count;
             int lap = Mathf.FloorToInt((float)virtualIndex / count);
@@ -269,16 +325,17 @@ namespace KidzDev.Unity.RecyclableScroll
                 return;
 
             // Release everything that fell outside the new window.
-            _scratch.Clear();
+            _indicesToRecycle.Clear();
             foreach (KeyValuePair<int, RecyclableScrollItem> kv in _active)
                 if (kv.Key < first || kv.Key > last)
-                    _scratch.Add(kv.Key);
-            for (int i = 0; i < _scratch.Count; i++)
-                Release(_scratch[i]);
+                    _indicesToRecycle.Add(kv.Key);
+            for (int i = 0; i < _indicesToRecycle.Count; i++)
+                Release(_indicesToRecycle[i]);
 
-            // Realize everything newly inside the window.
+            // Realize everything newly inside the window. Skip indices already realized or
+            // with an async acquire in flight, so a slow instantiator can't be double-started.
             for (int i = first; i <= last; i++)
-                if (!_active.ContainsKey(i))
+                if (!_active.ContainsKey(i) && !_pendingBinds.ContainsKey(i))
                     Acquire(i);
 
             _firstActive = first;
@@ -293,55 +350,129 @@ namespace KidzDev.Unity.RecyclableScroll
                 PositionItem((RectTransform)kv.Value.transform, kv.Key);
         }
 
+        // Realize the item at <index>. Fully synchronous data sources (no async bind, no custom
+        // instantiator) take an allocation-free fast path; anything async goes through the
+        // pipeline below with a per-item CancellationTokenSource tracked in _pendingBinds.
         private void Acquire(int index)
         {
-            if (_dataSource is IAsyncRecyclableDataSource asyncSource)
-            {
-                AcquireAsync(index, asyncSource).Forget();
-                return;
-            }
+            if (_instantiator == null && _dataSource is not IAsyncRecyclableDataSource)
+                AcquireSync(index);
+            else
+                AcquireAsync(index).Forget();
+        }
 
-            RecyclableScrollItem item = _pool.Count > 0 ? _pool.Pop() : Instantiate(itemPrefab, content);
+        // Allocation-free realize+bind for fully synchronous data sources.
+        private void AcquireSync(int index)
+        {
+            RecyclableScrollItem item = _pool.Count > 0
+                ? _pool.Pop()
+                : NewItem(Instantiate(itemPrefab, content));
+
             if (item.transform.parent != content)
                 item.transform.SetParent(content, false);
 
-            PositionItem((RectTransform)item.transform, index);
-            item.gameObject.SetActive(true);
-            int dataIndex = loop ? DataIndex(index) : index;
-            item.Index = dataIndex;
-            _active[index] = item;
+            PlaceAndActivate(item, index);
 
-            _dataSource.BindItem(dataIndex, item);
-            item.InvokeOnBind();
+            int dataIndex = loop ? ToDataIndex(index) : index;
+            item.Index = dataIndex;
+            ReplaceActive(index, item);
+
+            try
+            {
+                _dataSource.BindItem(dataIndex, item.gameObject);
+                item.InvokeOnBind();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogException(e);
+            }
         }
 
-        private async UniTaskVoid AcquireAsync(int index, IAsyncRecyclableDataSource asyncSource)
+        private async UniTaskVoid AcquireAsync(int index)
         {
             var cts = new CancellationTokenSource();
             _pendingBinds[index] = cts;
 
-            RecyclableScrollItem item = _pool.Count > 0 ? _pool.Pop() : Instantiate(itemPrefab, content);
-            if (item.transform.parent != content)
-                item.transform.SetParent(content, false);
-
-            PositionItem((RectTransform)item.transform, index);
-            item.gameObject.SetActive(true);
-            int dataIndex = loop ? DataIndex(index) : index;
-            item.Index = dataIndex;
-            _active[index] = item;
-
             try
             {
-                await asyncSource.BindItemAsync(dataIndex, item, cts.Token);
+                RecyclableScrollItem item;
+                if (_pool.Count > 0)
+                {
+                    item = _pool.Pop();
+                }
+                else if (_instantiator != null)
+                {
+                    GameObject go = await _instantiator.InstantiateAsync(cts.Token);
+                    // Cancelled while the object was loading: destroy it and bail.
+                    if (cts.IsCancellationRequested)
+                    {
+                        _instantiator.Destroy(go);
+                        return;
+                    }
+                    go.transform.SetParent(content, false);
+                    item = NewItem(go);
+                }
+                else
+                {
+                    item = NewItem(Instantiate(itemPrefab, content));
+                }
+
+                if (item.transform.parent != content)
+                    item.transform.SetParent(content, false);
+
+                PlaceAndActivate(item, index);
+
+                int dataIndex = loop ? ToDataIndex(index) : index;
+                item.Index = dataIndex;
+                ReplaceActive(index, item);
+
+                if (_dataSource is IAsyncRecyclableDataSource asyncSource)
+                    await asyncSource.BindItemAsync(dataIndex, item.gameObject, cts.Token);
+                else
+                    _dataSource.BindItem(dataIndex, item.gameObject);
+
+                // Skip the bound-callback if the item scrolled out while binding.
                 if (!cts.IsCancellationRequested)
                     item.InvokeOnBind();
             }
-            catch (System.OperationCanceledException) { }
+            catch (System.OperationCanceledException) { /* item scrolled out mid-flight */ }
+            catch (System.Exception e) { Debug.LogException(e); }
             finally
             {
-                _pendingBinds.Remove(index);
-                cts.Dispose();
+                ClearPending(index, cts);
             }
+        }
+
+        // Get-or-add the item component on a freshly created GameObject.
+        private static RecyclableScrollItem NewItem(GameObject go)
+            => go.GetComponent<RecyclableScrollItem>() ?? go.AddComponent<RecyclableScrollItem>();
+
+        // Position the item for its (virtual) index and show it.
+        private void PlaceAndActivate(RecyclableScrollItem item, int index)
+        {
+            PositionItem((RectTransform)item.transform, index);
+            item.gameObject.SetActive(true);
+        }
+
+        // Insert into the active set, recycling any stale occupant of the same slot first
+        // (defends against a re-entrant realize of the same index).
+        private void ReplaceActive(int index, RecyclableScrollItem item)
+        {
+            if (_active.TryGetValue(index, out RecyclableScrollItem existing) && existing != item)
+            {
+                existing.gameObject.SetActive(false);
+                _pool.Push(existing);
+            }
+            _active[index] = item;
+        }
+
+        // Remove this task's pending-bind entry only if it still owns the slot, then dispose.
+        // A released-then-reacquired index installs a newer CTS we must not clobber.
+        private void ClearPending(int index, CancellationTokenSource cts)
+        {
+            if (_pendingBinds.TryGetValue(index, out CancellationTokenSource current) && current == cts)
+                _pendingBinds.Remove(index);
+            cts.Dispose();
         }
 
         private void Release(int index)
@@ -366,11 +497,11 @@ namespace KidzDev.Unity.RecyclableScroll
 
             if (_active.Count > 0)
             {
-                _scratch.Clear();
+                _indicesToRecycle.Clear();
                 foreach (KeyValuePair<int, RecyclableScrollItem> kv in _active)
-                    _scratch.Add(kv.Key);
-                for (int i = 0; i < _scratch.Count; i++)
-                    Release(_scratch[i]);
+                    _indicesToRecycle.Add(kv.Key);
+                for (int i = 0; i < _indicesToRecycle.Count; i++)
+                    Release(_indicesToRecycle[i]);
             }
 
             _firstActive = 0;
@@ -379,7 +510,7 @@ namespace KidzDev.Unity.RecyclableScroll
 
         private void PositionItem(RectTransform rt, int virtualIndex)
         {
-            int phys      = loop && _layout.Count > 0 ? DataIndex(virtualIndex) : virtualIndex;
+            int phys      = loop && _layout.Count > 0 ? ToDataIndex(virtualIndex) : virtualIndex;
             float mainLocal = AbsoluteStart(virtualIndex) - _scrollPos;
             float size      = _layout.GetSize(phys);
             float crossSize = _layout.GetCrossSize(phys);
@@ -433,7 +564,7 @@ namespace KidzDev.Unity.RecyclableScroll
         {
             if (eventData.button != PointerEventData.InputButton.Left) return;
             _velocity = 0f;
-            _dragValid = RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            _dragPointerValid = RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 viewport, eventData.position, eventData.pressEventCamera, out Vector2 local);
             _pointerStartMain = IsVertical ? local.y : local.x;
             _scrollStartPos = _scrollPos;
@@ -443,7 +574,7 @@ namespace KidzDev.Unity.RecyclableScroll
 
         void IDragHandler.OnDrag(PointerEventData eventData)
         {
-            if (!_dragging || !_dragValid || _layout == null) return;
+            if (!_dragging || !_dragPointerValid || _layout == null) return;
             if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
                     viewport, eventData.position, eventData.pressEventCamera, out Vector2 local))
                 return;

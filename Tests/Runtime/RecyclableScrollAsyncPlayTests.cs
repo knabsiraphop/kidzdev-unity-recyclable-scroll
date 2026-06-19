@@ -17,10 +17,10 @@ namespace KidzDev.Unity.RecyclableScroll.Tests.Play
         {
             public readonly List<int> Bound = new List<int>();
             public int ItemCount => 100;
-            public void BindItem(int index, RecyclableScrollItem item) { }
+            public void BindItem(int index, GameObject item) { }
             public float GetItemSize(int index) => 80f;
 
-            public async UniTask BindItemAsync(int index, RecyclableScrollItem item, CancellationToken cancellationToken)
+            public async UniTask BindItemAsync(int index, GameObject item, CancellationToken cancellationToken)
             {
                 await UniTask.Yield(cancellationToken);
                 Bound.Add(index);
@@ -32,10 +32,10 @@ namespace KidzDev.Unity.RecyclableScroll.Tests.Play
             public readonly List<int> Started = new List<int>();
             public readonly List<int> Completed = new List<int>();
             public int ItemCount => 100;
-            public void BindItem(int index, RecyclableScrollItem item) { }
+            public void BindItem(int index, GameObject item) { }
             public float GetItemSize(int index) => 80f;
 
-            public async UniTask BindItemAsync(int index, RecyclableScrollItem item, CancellationToken cancellationToken)
+            public async UniTask BindItemAsync(int index, GameObject item, CancellationToken cancellationToken)
             {
                 Started.Add(index);
                 // Two-frame delay so we have time to cancel between start and completion.
@@ -71,14 +71,14 @@ namespace KidzDev.Unity.RecyclableScroll.Tests.Play
             var contentGO = new GameObject("Content", typeof(RectTransform));
             contentGO.transform.SetParent(viewportGO.transform, false);
 
-            var itemGO = new GameObject("Item", typeof(RectTransform), typeof(RecyclableScrollItem));
+            var itemGO = new GameObject("Item", typeof(RectTransform));
             itemGO.transform.SetParent(_root.transform, false);
             itemGO.SetActive(false);
 
             var view = svGO.AddComponent<RecyclableScrollView>();
             SetPrivate(view, "viewport", viewportRT);
             SetPrivate(view, "content", (RectTransform)contentGO.transform);
-            SetPrivate(view, "itemPrefab", itemGO.GetComponent<RecyclableScrollItem>());
+            SetPrivate(view, "itemPrefab", itemGO);
             return view;
         }
 
@@ -146,7 +146,7 @@ namespace KidzDev.Unity.RecyclableScroll.Tests.Play
         private sealed class EmptyDataSource : IRecyclableDataSource
         {
             public int ItemCount => 0;
-            public void BindItem(int index, RecyclableScrollItem item) { }
+            public void BindItem(int index, GameObject item) { }
             public float GetItemSize(int index) => 80f;
         }
     }

@@ -26,7 +26,7 @@ namespace KidzDev.Unity.RecyclableScroll.Tests.Play
             private readonly float _size;
             public CountingSource(int count, float size) { _count = count; _size = size; }
             public int ItemCount => _count;
-            public void BindItem(int index, RecyclableScrollItem item) { }
+            public void BindItem(int index, GameObject item) { }
             public float GetItemSize(int index) => _size;
         }
 
@@ -56,14 +56,14 @@ namespace KidzDev.Unity.RecyclableScroll.Tests.Play
             var contentGO = new GameObject("Content", typeof(RectTransform));
             contentGO.transform.SetParent(viewportGO.transform, false);
 
-            var itemGO = new GameObject("Item", typeof(RectTransform), typeof(RecyclableScrollItem));
+            var itemGO = new GameObject("Item", typeof(RectTransform));
             itemGO.transform.SetParent(_root.transform, false);
             itemGO.SetActive(false);
 
             var view = svGO.AddComponent<RecyclableScrollView>();
             SetField(view, "viewport", viewportRT);
             SetField(view, "content", (RectTransform)contentGO.transform);
-            SetField(view, "itemPrefab", itemGO.GetComponent<RecyclableScrollItem>());
+            SetField(view, "itemPrefab", itemGO);
             SetField(view, "loop", true);
             view.SetDataSource(new CountingSource(itemCount, itemSize));
             return view;

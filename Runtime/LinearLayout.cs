@@ -28,6 +28,8 @@ namespace KidzDev.Unity.RecyclableScroll
         {
             _count = source?.ItemCount ?? 0;
 
+            // Grow-only by design: arrays are reused across rebuilds and never shrink, to avoid
+            // realloc churn when the item count fluctuates. Deliberate retention, not a leak.
             if (_starts.Length < _count)
             {
                 _starts = new float[_count];

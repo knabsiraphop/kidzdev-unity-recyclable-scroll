@@ -1,3 +1,5 @@
+using UnityEngine;
+
 namespace KidzDev.Unity.RecyclableScroll
 {
     /// <summary>
@@ -9,8 +11,8 @@ namespace KidzDev.Unity.RecyclableScroll
         /// <summary>Total number of items in the list.</summary>
         int ItemCount { get; }
 
-        /// <summary>Push the data at <paramref name="index"/> into a recycled item view.</summary>
-        void BindItem(int index, RecyclableScrollItem item);
+        /// <summary>Push the data at <paramref name="index"/> into the recycled item <see cref="GameObject"/>.</summary>
+        void BindItem(int index, GameObject item);
 
         /// <summary>
         /// Size (height for vertical, width for horizontal) of the item at

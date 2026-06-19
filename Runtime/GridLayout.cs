@@ -37,6 +37,8 @@ namespace KidzDev.Unity.RecyclableScroll
             _cellCross = _columns > 0 ? Math.Max(0f, usableCross) / _columns : 0f;
             _rowCount = _count == 0 ? 0 : (_count + _columns - 1) / _columns;
 
+            // Grow-only by design: row arrays are reused across rebuilds and never shrink, to
+            // avoid realloc churn when the item count fluctuates. Deliberate retention, not a leak.
             if (_rowStarts.Length < _rowCount)
             {
                 _rowStarts = new float[_rowCount];

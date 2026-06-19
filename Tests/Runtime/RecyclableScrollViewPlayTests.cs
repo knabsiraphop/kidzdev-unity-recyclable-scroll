@@ -13,7 +13,7 @@ namespace KidzDev.Unity.RecyclableScroll.Tests.Play
         private sealed class StubDataSource : IRecyclableDataSource
         {
             public int ItemCount => 100;
-            public void BindItem(int index, RecyclableScrollItem item) { }
+            public void BindItem(int index, UnityEngine.GameObject item) { }
             public float GetItemSize(int index) => 80f;
         }
 

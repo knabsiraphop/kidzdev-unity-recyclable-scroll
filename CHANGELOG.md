@@ -5,6 +5,47 @@ All notable changes to this package are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-06-19
+
+### Added
+
+- `IItemInstantiator`: optional seam for custom async item instantiation (`InstantiateAsync` /
+  `Destroy`). Detected automatically by `RecyclableScrollView.SetDataSource` when the data source
+  implements it. Can also be passed explicitly to
+  `SetDataSource(IRecyclableDataSource, IItemInstantiator)` or set independently via
+  `SetInstantiator(IItemInstantiator)`.
+- `RecyclableDataSource<TItem>` and `AsyncRecyclableDataSource<TItem>`: concrete generic helpers that
+  wire a delegate-based data source without subclassing. Both implement `IItemInstantiator` and are
+  detected automatically when an `instantiate` delegate is supplied. `AsyncRecyclableDataSource` also
+  implements `IAsyncRecyclableDataSource`.
+- `RecyclableScrollController` (MonoBehaviour): high-level bridge that exposes `Init`, `Clear`,
+  `Refill`, `UpdateData`, `Refresh`, `ScrollToStart`, `ScrollToEnd`, and `JumpToIndex` operations.
+  Optionally syncs a uGUI `Scrollbar` and fires `OnScrolledToStart` / `OnScrolledToEnd` UnityEvents.
+- `RecyclableScrollView.MaxScrollPosition` read-only property: maximum valid scroll offset
+  (clamp target for UI controls).
+- `RecyclableScrollView.IsAtStart` / `IsAtEnd` read-only properties: edge-detection helpers used
+  by `RecyclableScrollController`.
+- `RecyclableScrollView.SetDataSource(IRecyclableDataSource, IItemInstantiator)` overload: assign
+  data source and an explicit instantiator in a single call.
+- `RecyclableScrollView.SetInstantiator(IItemInstantiator)`: update the instantiator without
+  replacing the data source. Pass `null` to revert to the default `Instantiate(itemPrefab)`.
+- `_pendingBinds` guard: slow async instantiators can no longer double-spawn or orphan a
+  `GameObject` for the same index when the visible window is re-driven while instantiation is
+  in flight.
+- `RecyclableScrollLifecyclePlayTests` (PlayMode): regression suite covering `OnBind` timing (sync
+  and async paths), duplicate-spawn prevention under a slow instantiator, and one-shot instantiator
+  failure recovery.
+- Demo sample restructured into three scenes: `01_ControllerShowcase` (controller API),
+  `02_LinearScrolls` (multi-orientation list), `03_GridScrolls` (grid layouts). New item components:
+  `AchievementCard`, `BadgeCard`, `ContactItem`, `GalleryCard`, `LeaderboardItem`, `NewsCard`,
+  `ProductCard`, `ProfileCard`.
+
+### Changed
+
+- `RecyclableScrollView.SetDataSource(IRecyclableDataSource)` now auto-detects `IItemInstantiator`
+  on the data source (when `IsEnabled` is true) and installs it as the active instantiator.
+- Existing tests updated to cover the new `MaxScrollPosition`, `IsAtStart`, and `IsAtEnd` surface.
+
 ## [0.3.0] - 2026-06-19
 
 ### Added
