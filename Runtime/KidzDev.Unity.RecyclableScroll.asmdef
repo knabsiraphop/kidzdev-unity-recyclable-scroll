@@ -2,7 +2,8 @@
   "name": "KidzDev.Unity.RecyclableScroll",
   "rootNamespace": "KidzDev.Unity.RecyclableScroll",
   "references": [
-    "UnityEngine.UI"
+    "UnityEngine.UI",
+    "UniTask"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

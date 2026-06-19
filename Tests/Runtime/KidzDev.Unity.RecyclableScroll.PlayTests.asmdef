@@ -5,7 +5,8 @@
         "KidzDev.Unity.RecyclableScroll",
         "UnityEngine.UI",
         "UnityEngine.TestRunner",
-        "UnityEditor.TestRunner"
+        "UnityEditor.TestRunner",
+        "UniTask"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

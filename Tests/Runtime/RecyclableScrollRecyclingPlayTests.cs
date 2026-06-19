@@ -8,9 +8,11 @@ using UnityEngine.UI;
 namespace KidzDev.Unity.RecyclableScroll.Tests.Play
 {
     /// <summary>
-    /// Integration tests that build a real uGUI Scroll View in code and prove the
-    /// recycler only realizes a viewport-sized window, reuses its pool when scrolling,
-    /// and sizes content along the correct axis for each orientation.
+    /// Integration tests that build a real uGUI canvas in code and prove the recycler
+    /// only realizes a viewport-sized window, reuses its pool when scrolling, and
+    /// reports the right content length for each orientation. The owned scroll engine
+    /// keeps the content rect viewport-sized, so length is asserted via
+    /// <see cref="RecyclableScrollView.TotalContentLength"/> rather than the rect.
     /// </summary>
     public class RecyclableScrollRecyclingPlayTests
     {
@@ -45,7 +47,7 @@ namespace KidzDev.Unity.RecyclableScroll.Tests.Play
             _root = new GameObject("Canvas", typeof(Canvas));
             ((RectTransform)_root.transform).sizeDelta = new Vector2(2000f, 2000f);
 
-            var svGO = new GameObject("ScrollView", typeof(RectTransform), typeof(Image), typeof(ScrollRect));
+            var svGO = new GameObject("ScrollView", typeof(RectTransform), typeof(Image));
             svGO.transform.SetParent(_root.transform, false);
 
             var viewportGO = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D));
@@ -58,21 +60,23 @@ namespace KidzDev.Unity.RecyclableScroll.Tests.Play
             contentGO.transform.SetParent(viewportGO.transform, false);
             var contentRT = (RectTransform)contentGO.transform;
 
-            var scrollRect = svGO.GetComponent<ScrollRect>();
-            scrollRect.viewport = viewportRT;
-            scrollRect.content = contentRT;
-
             // Inactive template so Instantiate clones an inactive item.
             var itemGO = new GameObject("Item", typeof(RectTransform), typeof(RecyclableScrollItem));
             itemGO.transform.SetParent(_root.transform, false);
             itemGO.SetActive(false);
 
-            // Adding the view runs Awake, which adopts the ScrollRect + its viewport/content.
             var view = svGO.AddComponent<RecyclableScrollView>();
+            SetPrivate(view, "viewport", viewportRT);
+            SetPrivate(view, "content", contentRT);
             SetPrivate(view, "itemPrefab", itemGO.GetComponent<RecyclableScrollItem>());
             SetPrivate(view, "orientation", orientation);
             return view;
         }
+
+        private static RectTransform Content(RecyclableScrollView view) =>
+            (RectTransform)typeof(RecyclableScrollView)
+                .GetField("content", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(view);
 
         private static void SetPrivate(object target, string field, object value)
         {
@@ -85,16 +89,16 @@ namespace KidzDev.Unity.RecyclableScroll.Tests.Play
             Enumerable.Range(0, content.childCount).Count(i => content.GetChild(i).gameObject.activeSelf);
 
         [Test]
-        public void Refresh_RealizesOnlyAWindow_AndSizesContent()
+        public void Refresh_RealizesOnlyAWindow_AndReportsContentLength()
         {
             var view = BuildView(RecyclableScrollView.Orientation.Vertical, new Vector2(400f, 600f));
             var src = new RecordingDataSource(1000, 100f);
             view.SetDataSource(src);
 
-            RectTransform content = view.GetComponent<ScrollRect>().content;
+            RectTransform content = Content(view);
 
-            // 1000 items * 100 each = 100000 content height.
-            Assert.That(content.sizeDelta.y, Is.EqualTo(100000f).Within(0.1f));
+            // 1000 items * 100 each = 100000 logical content length (rect stays viewport-sized).
+            Assert.That(view.TotalContentLength, Is.EqualTo(100000f).Within(0.1f));
             // window = [0 .. IndexAt(600)+buffer] = [0..7] = 8 items (not 1000).
             Assert.That(ActiveChildCount(content), Is.EqualTo(8));
             Assert.That(src.Bound, Is.EquivalentTo(new[] { 0, 1, 2, 3, 4, 5, 6, 7 }));
@@ -105,7 +109,7 @@ namespace KidzDev.Unity.RecyclableScroll.Tests.Play
         {
             var view = BuildView(RecyclableScrollView.Orientation.Vertical, new Vector2(400f, 600f));
             view.SetDataSource(new RecordingDataSource(1000, 100f));
-            RectTransform content = view.GetComponent<ScrollRect>().content;
+            RectTransform content = Content(view);
 
             Assert.That(content.childCount, Is.EqualTo(8), "precondition: initial window realized");
 
@@ -124,13 +128,13 @@ namespace KidzDev.Unity.RecyclableScroll.Tests.Play
         }
 
         [Test]
-        public void HorizontalOrientation_SizesContentOnXAxis()
+        public void HorizontalOrientation_ReportsContentLengthOnMainAxis()
         {
             var view = BuildView(RecyclableScrollView.Orientation.Horizontal, new Vector2(600f, 400f));
             view.SetDataSource(new RecordingDataSource(1000, 100f));
-            RectTransform content = view.GetComponent<ScrollRect>().content;
+            RectTransform content = Content(view);
 
-            Assert.That(content.sizeDelta.x, Is.EqualTo(100000f).Within(0.1f));
+            Assert.That(view.TotalContentLength, Is.EqualTo(100000f).Within(0.1f));
             Assert.That(ActiveChildCount(content), Is.EqualTo(8)); // IndexAt(600)=6, +1 buffer
         }
     }

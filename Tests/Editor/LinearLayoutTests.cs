@@ -12,7 +12,7 @@ namespace KidzDev.Unity.RecyclableScroll.Tests
         private static LinearLayout Build(IRecyclableDataSource source, float spacing)
         {
             var layout = new LinearLayout();
-            layout.Rebuild(source, spacing);
+            layout.Rebuild(source, new LayoutMetrics(mainSpacing: spacing));
             return layout;
         }
 
