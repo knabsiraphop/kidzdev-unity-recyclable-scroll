@@ -1,6 +1,6 @@
 {
   "name": "com.kidzdev.unity.recyclable-scroll",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "displayName": "KidzDev Unity Recyclable Scroll",
   "description": "High-performance recyclable ScrollRect for Unity uGUI — object pooling, linear & loop modes, variable item sizes, sync/async item loading.",
   "unity": "6000.0",

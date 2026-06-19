@@ -5,6 +5,15 @@ All notable changes to this package are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-06-20
+
+### Fixed
+
+- `RecyclableScrollView.Refresh()` now has a re-entrancy guard (`_refreshing` flag with
+  `try/finally`) that prevents duplicate item sets when a sizer's `OnSizeChanged` fires
+  during `Canvas.ForceUpdateCanvases()`. The inner call is detected and returns immediately;
+  the outer call continues to completion with the fully flushed viewport metrics.
+
 ## [0.4.0] - 2026-06-19
 
 ### Added

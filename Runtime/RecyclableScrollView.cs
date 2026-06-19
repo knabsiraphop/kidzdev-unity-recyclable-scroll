@@ -82,6 +82,7 @@ namespace KidzDev.Unity.RecyclableScroll
         private float _scrollPos;
         private float _velocity;
         private bool _dragging;
+        private bool _refreshing;
         private bool _dragPointerValid;
         private float _pointerStartMain;
         private float _scrollStartPos;
@@ -164,20 +165,34 @@ namespace KidzDev.Unity.RecyclableScroll
         public void Refresh()
         {
             if (viewport == null || content == null) return;
+            // Guard against re-entrant calls (e.g. a sizer's OnSizeChanged firing again
+            // during Canvas.ForceUpdateCanvases below). The outer call already reads the
+            // updated viewport in BuildMetrics after the canvas flush, so the inner call
+            // would produce the same result and must not be allowed to recycle/re-acquire
+            // items while the outer call is mid-flight.
+            if (_refreshing) return;
 
-            EnsureLayout();
-            ApplyContentLayout();
-            // Deliberate full canvas flush: Rebuild reads the viewport's cross-axis size below,
-            // which is only accurate once pending layout has been applied. Cost is acceptable
-            // here because Refresh runs on data-source changes, not per frame.
-            Canvas.ForceUpdateCanvases();
+            _refreshing = true;
+            try
+            {
+                EnsureLayout();
+                ApplyContentLayout();
+                // Deliberate full canvas flush: Rebuild reads the viewport's cross-axis size below,
+                // which is only accurate once pending layout has been applied. Cost is acceptable
+                // here because Refresh runs on data-source changes, not per frame.
+                Canvas.ForceUpdateCanvases();
 
-            _layout.Rebuild(_dataSource, BuildMetrics());
-            if (!loop) _scrollPos = Mathf.Clamp(_scrollPos, 0f, MaxScroll);
+                _layout.Rebuild(_dataSource, BuildMetrics());
+                if (!loop) _scrollPos = Mathf.Clamp(_scrollPos, 0f, MaxScroll);
 
-            RecycleAll();
-            UpdateVisibleWindow(force: true);
-            RepositionActive();
+                RecycleAll();
+                UpdateVisibleWindow(force: true);
+                RepositionActive();
+            }
+            finally
+            {
+                _refreshing = false;
+            }
         }
 
         /// <summary>Scroll so the item at <paramref name="index"/> aligns to the viewport start.</summary>
