@@ -601,6 +601,9 @@ UnityEvent OnScrolledToEnd   { get; }  // fires once when trailing edge is reach
 Import the **Demo** sample from the Package Manager. It contains three scenes:
 
 - `01_ControllerShowcase` — demonstrates `RecyclableScrollController` operations and events.
+
+![Controller Showcase](Documentation~/showcase.gif)
+
 - `02_LinearScrolls` — vertical and horizontal linear lists with a variety of item types.
 
 ![Linear Scrolls](Documentation~/linear.gif)
