@@ -5,8 +5,6 @@ by recycling a small pool of item views — only a viewport-worth of GameObjects
 exist, regardless of data-set size. Drives its own scroll engine (drag, inertia, mouse-wheel,
 elastic edges) without delegating to a `ScrollRect`.
 
-![Controller Showcase](Documentation~/showcase.gif)
-
 ## Install
 
 Add via Package Manager → *Add package from git URL*, or edit `Packages/manifest.json`:
@@ -16,6 +14,24 @@ https://github.com/knabsiraphop/kidzdev-unity-recyclable-scroll.git#v0.4.1
 ```
 
 **Dependencies**: `com.unity.ugui` 2.0.0 and [UniTask](https://openupm.com/packages/com.cysharp.unitask/) via OpenUPM.
+
+---
+
+## Sample
+
+Import the **Demo** sample from the Package Manager. It contains three scenes:
+
+- `01_ControllerShowcase` — demonstrates `RecyclableScrollController` operations and events.
+
+![Controller Showcase](Documentation~/showcase.gif)
+
+- `02_LinearScrolls` — vertical and horizontal linear lists with a variety of item types.
+
+![Linear Scrolls](Documentation~/linear.gif)
+
+- `03_GridScrolls` — multi-column grids with uniform and variable row heights.
+
+![Grid Scrolls](Documentation~/grid.gif)
 
 ---
 
@@ -593,24 +609,6 @@ UnityEvent OnScrolledToEnd   { get; }  // fires once when trailing edge is reach
 | Pagination / load-more | Use `RecyclableScrollController.OnScrolledToEnd` + `UpdateData` |
 | Reactive to viewport resize | Call `Refresh()` in `ResponsiveSizeCalculator.OnSizeChanged` |
 | Full control over data logic | Implement `IRecyclableDataSource` (+ optionally `IAsyncRecyclableDataSource`) directly |
-
----
-
-## Sample
-
-Import the **Demo** sample from the Package Manager. It contains three scenes:
-
-- `01_ControllerShowcase` — demonstrates `RecyclableScrollController` operations and events.
-
-![Controller Showcase](Documentation~/showcase.gif)
-
-- `02_LinearScrolls` — vertical and horizontal linear lists with a variety of item types.
-
-![Linear Scrolls](Documentation~/linear.gif)
-
-- `03_GridScrolls` — multi-column grids with uniform and variable row heights.
-
-![Grid Scrolls](Documentation~/grid.gif)
 
 ---
 
