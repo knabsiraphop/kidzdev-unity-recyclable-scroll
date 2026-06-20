@@ -5,6 +5,8 @@ by recycling a small pool of item views — only a viewport-worth of GameObjects
 exist, regardless of data-set size. Drives its own scroll engine (drag, inertia, mouse-wheel,
 elastic edges) without delegating to a `ScrollRect`.
 
+![Controller Showcase](Documentation~/showcase.gif)
+
 ## Install
 
 Add via Package Manager → *Add package from git URL*, or edit `Packages/manifest.json`:
@@ -41,6 +43,8 @@ https://github.com/knabsiraphop/kidzdev-unity-recyclable-scroll.git#v0.4.1
 ---
 
 ## Inspector setup
+
+![Inspector](Documentation~/inspector.png)
 
 ### 1. Create the scroll hierarchy
 
@@ -598,7 +602,12 @@ Import the **Demo** sample from the Package Manager. It contains three scenes:
 
 - `01_ControllerShowcase` — demonstrates `RecyclableScrollController` operations and events.
 - `02_LinearScrolls` — vertical and horizontal linear lists with a variety of item types.
+
+![Linear Scrolls](Documentation~/linear.gif)
+
 - `03_GridScrolls` — multi-column grids with uniform and variable row heights.
+
+![Grid Scrolls](Documentation~/grid.gif)
 
 ---
 
