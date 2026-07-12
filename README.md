@@ -10,7 +10,7 @@ elastic edges) without delegating to a `ScrollRect`.
 Add via Package Manager → *Add package from git URL*, or edit `Packages/manifest.json`:
 
 ```
-https://github.com/knabsiraphop/kidzdev-unity-recyclable-scroll.git#v0.4.1
+https://github.com/knabsiraphop/kidzdev-unity-recyclable-scroll.git#v0.5.0
 ```
 
 **Dependencies**: `com.unity.ugui` 2.0.0 and [UniTask](https://openupm.com/packages/com.cysharp.unitask/) via OpenUPM.

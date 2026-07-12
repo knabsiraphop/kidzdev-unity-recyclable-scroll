@@ -43,6 +43,10 @@ namespace KidzDev.Unity.RecyclableScroll
         [SerializeField] private RectTransform viewport;
         [SerializeField] private RectTransform content;
         [SerializeField] private GameObject itemPrefab;
+        [Tooltip("Prefab per item kind for IKindedDataSource consumers, indexed by IKindedDataSource.GetItemKind(). " +
+                 "Kind 0 always resolves to itemPrefab above (index 0 of this array is unused) so non-kinded " +
+                 "consumers are unaffected; give kind 0 to whichever shape you want itemPrefab to represent.")]
+        [SerializeField] private GameObject[] kindPrefabs;
 
         [Header("Layout")]
         [SerializeField] private Orientation orientation = Orientation.Vertical;
@@ -70,11 +74,14 @@ namespace KidzDev.Unity.RecyclableScroll
         private IScrollLayout _layout;
         private readonly Dictionary<int, RecyclableScrollItem> _active = new Dictionary<int, RecyclableScrollItem>();
         private readonly Dictionary<int, CancellationTokenSource> _pendingBinds = new Dictionary<int, CancellationTokenSource>();
-        private readonly Stack<RecyclableScrollItem> _pool = new Stack<RecyclableScrollItem>();
+        private readonly Dictionary<int, Stack<RecyclableScrollItem>> _pools = new Dictionary<int, Stack<RecyclableScrollItem>>();
         private readonly List<int> _indicesToRecycle = new List<int>();
+        private readonly HashSet<int> _warnedMissingKindPrefabs = new HashSet<int>();
 
         private IRecyclableDataSource _dataSource;
+        private IKindedDataSource _kindedSource;
         private IItemInstantiator _instantiator;
+        private IKindedItemInstantiator _kindedInstantiator;
         private int _firstActive;
         private int _lastActive = -1;
 
@@ -119,20 +126,36 @@ namespace KidzDev.Unity.RecyclableScroll
             }
             _pendingBinds.Clear();
 
-            if (_instantiator != null)
+            if (_kindedInstantiator != null)
             {
-                foreach (RecyclableScrollItem item in _pool)
-                    _instantiator.Destroy(item.gameObject);
+                foreach (Stack<RecyclableScrollItem> pool in _pools.Values)
+                    foreach (RecyclableScrollItem item in pool)
+                        _kindedInstantiator.Destroy(item.gameObject);
+                foreach (KeyValuePair<int, RecyclableScrollItem> kv in _active)
+                    _kindedInstantiator.Destroy(kv.Value.gameObject);
+            }
+            else if (_instantiator != null)
+            {
+                foreach (Stack<RecyclableScrollItem> pool in _pools.Values)
+                    foreach (RecyclableScrollItem item in pool)
+                        _instantiator.Destroy(item.gameObject);
                 foreach (KeyValuePair<int, RecyclableScrollItem> kv in _active)
                     _instantiator.Destroy(kv.Value.gameObject);
             }
         }
 
-        /// <summary>Assign the data source that feeds this view; resets to the top and rebuilds.</summary>
+        /// <summary>
+        /// Assign the data source that feeds this view; resets to the top and rebuilds. Auto-detects
+        /// <see cref="IKindedDataSource"/>, and either <see cref="IItemInstantiator"/> or
+        /// <see cref="IKindedItemInstantiator"/> (the non-kinded one takes precedence if the source
+        /// implements both, for backward compatibility with existing single-shape consumers).
+        /// </summary>
         public void SetDataSource(IRecyclableDataSource dataSource)
         {
             _dataSource = dataSource;
+            _kindedSource = dataSource as IKindedDataSource;
             _instantiator = dataSource is IItemInstantiator i && i.IsEnabled ? i : null;
+            _kindedInstantiator = _instantiator == null && dataSource is IKindedItemInstantiator ki && ki.IsEnabled ? ki : null;
             _scrollPos = 0f;
             _velocity = 0f;
             Refresh();
@@ -145,7 +168,25 @@ namespace KidzDev.Unity.RecyclableScroll
         /// </summary>
         public void SetDataSource(IRecyclableDataSource dataSource, IItemInstantiator instantiator)
         {
+            _kindedSource = dataSource as IKindedDataSource;
             _instantiator = instantiator is { IsEnabled: true } ? instantiator : null;
+            _kindedInstantiator = null;
+            _dataSource = dataSource;
+            _scrollPos = 0f;
+            _velocity = 0f;
+            Refresh();
+        }
+
+        /// <summary>
+        /// Assign the data source and an explicit kind-aware instantiator in one call. The
+        /// instantiator takes precedence over any <see cref="IKindedItemInstantiator"/> the data
+        /// source might implement.
+        /// </summary>
+        public void SetDataSource(IRecyclableDataSource dataSource, IKindedItemInstantiator instantiator)
+        {
+            _kindedSource = dataSource as IKindedDataSource;
+            _kindedInstantiator = instantiator is { IsEnabled: true } ? instantiator : null;
+            _instantiator = null;
             _dataSource = dataSource;
             _scrollPos = 0f;
             _velocity = 0f;
@@ -154,11 +195,14 @@ namespace KidzDev.Unity.RecyclableScroll
 
         /// <summary>
         /// Override the item instantiator without replacing the data source. Pass <c>null</c>
-        /// to revert to the default <c>Instantiate(itemPrefab)</c> behaviour.
+        /// to revert to the default <c>Instantiate(itemPrefab)</c> behaviour. Clears any
+        /// <see cref="IKindedItemInstantiator"/> previously set via
+        /// <see cref="SetDataSource(IRecyclableDataSource,IKindedItemInstantiator)"/>.
         /// </summary>
         public void SetInstantiator(IItemInstantiator instantiator)
         {
             _instantiator = instantiator is { IsEnabled: true } ? instantiator : null;
+            _kindedInstantiator = null;
         }
 
         /// <summary>Rebuild the visible window from scratch against the current data source.</summary>
@@ -209,6 +253,62 @@ namespace KidzDev.Unity.RecyclableScroll
             if (_layout == null) return;
             _velocity = 0f;
             _scrollPos = loop ? mainOffset : Mathf.Clamp(mainOffset, 0f, MaxScroll);
+            UpdateVisibleWindow(force: true);
+            RepositionActive();
+        }
+
+        /// <summary>
+        /// Call after appending items to the end of the backing data source. Re-layouts without
+        /// moving the view or rebinding already-active items — appended items don't shift earlier
+        /// offsets/indices, so nothing currently on screen needs to change.
+        /// </summary>
+        public void AppendData()
+        {
+            if (_dataSource == null || _layout == null) return;
+            EnsureLayout();
+            _layout.Rebuild(_dataSource, BuildMetrics());
+            UpdateVisibleWindow(force: true);
+            RepositionActive();
+        }
+
+        /// <summary>
+        /// Call after inserting <paramref name="count"/> items at the front of the backing data
+        /// source (e.g. a page of older chat history). Re-layouts and keeps the currently visible
+        /// content pinned at the same screen position — no visual jump. Not supported in loop mode
+        /// (falls back to <see cref="Refresh"/>). Defined precisely for a linear (single-column)
+        /// layout or a row-aligned <paramref name="count"/> on a grid layout.
+        /// </summary>
+        public void PrependData(int count)
+        {
+            if (_dataSource == null || _layout == null || count <= 0) return;
+            if (loop)
+            {
+                Debug.LogError("RecyclableScrollView: PrependData is not supported in loop mode; falling back to Refresh().", this);
+                Refresh();
+                return;
+            }
+
+            // Nothing existed before this insert (e.g. first page load) — no on-screen content to
+            // anchor, so a plain rebuild is both correct and cheaper.
+            if (_dataSource.ItemCount <= count)
+            {
+                Refresh();
+                return;
+            }
+
+            EnsureLayout();
+            _layout.Rebuild(_dataSource, BuildMetrics());
+
+            // Main-axis length of the newly inserted block (spacing included): the leading edge of
+            // what is now item `count` is exactly how far the previously-first item moved.
+            float added = _layout.GetStart(count);
+            _scrollPos += added;
+            // Keep an in-flight drag stable — both are baselines the drag/inertia code reads from
+            // on the next frame; without shifting them the next drag delta snaps the view back.
+            _scrollStartPos += added;
+            _prevScrollPos += added;
+
+            RecycleAll();
             UpdateVisibleWindow(force: true);
             RepositionActive();
         }
@@ -370,25 +470,61 @@ namespace KidzDev.Unity.RecyclableScroll
         // pipeline below with a per-item CancellationTokenSource tracked in _pendingBinds.
         private void Acquire(int index)
         {
-            if (_instantiator == null && _dataSource is not IAsyncRecyclableDataSource)
+            if (_instantiator == null && _kindedInstantiator == null && _dataSource is not IAsyncRecyclableDataSource)
                 AcquireSync(index);
             else
                 AcquireAsync(index).Forget();
         }
 
+        // Get-or-create the pool for a kind. Non-kinded sources always use kind 0.
+        private Stack<RecyclableScrollItem> GetPool(int kind)
+        {
+            if (!_pools.TryGetValue(kind, out Stack<RecyclableScrollItem> pool))
+            {
+                pool = new Stack<RecyclableScrollItem>();
+                _pools[kind] = pool;
+            }
+            return pool;
+        }
+
+        // Kind 0 always resolves to itemPrefab (preserves exact behaviour for non-kinded
+        // consumers). Other kinds index into kindPrefabs; a missing entry logs once and falls
+        // back to itemPrefab so a misconfigured kind never hard-fails the view.
+        private GameObject ResolveKindPrefab(int kind)
+        {
+            if (kind == 0) return itemPrefab;
+
+            if (kindPrefabs != null && kind >= 0 && kind < kindPrefabs.Length && kindPrefabs[kind] != null)
+                return kindPrefabs[kind];
+
+            if (_warnedMissingKindPrefabs.Add(kind))
+                Debug.LogError($"RecyclableScrollView: no kindPrefabs entry for kind {kind}; falling back to itemPrefab.", this);
+            return itemPrefab;
+        }
+
         // Allocation-free realize+bind for fully synchronous data sources.
         private void AcquireSync(int index)
         {
-            RecyclableScrollItem item = _pool.Count > 0
-                ? _pool.Pop()
-                : NewItem(Instantiate(itemPrefab, content));
+            int dataIndex = loop ? ToDataIndex(index) : index;
+            int kind = _kindedSource?.GetItemKind(dataIndex) ?? 0;
+            Stack<RecyclableScrollItem> pool = GetPool(kind);
+
+            RecyclableScrollItem item;
+            if (pool.Count > 0)
+            {
+                item = pool.Pop();
+            }
+            else
+            {
+                item = NewItem(Instantiate(ResolveKindPrefab(kind), content));
+                item.Kind = kind;
+            }
 
             if (item.transform.parent != content)
                 item.transform.SetParent(content, false);
 
             PlaceAndActivate(item, index);
 
-            int dataIndex = loop ? ToDataIndex(index) : index;
             item.Index = dataIndex;
             ReplaceActive(index, item);
 
@@ -410,10 +546,27 @@ namespace KidzDev.Unity.RecyclableScroll
 
             try
             {
+                int dataIndex = loop ? ToDataIndex(index) : index;
+                int kind = _kindedSource?.GetItemKind(dataIndex) ?? 0;
+                Stack<RecyclableScrollItem> pool = GetPool(kind);
+
                 RecyclableScrollItem item;
-                if (_pool.Count > 0)
+                if (pool.Count > 0)
                 {
-                    item = _pool.Pop();
+                    item = pool.Pop();
+                }
+                else if (_kindedInstantiator != null)
+                {
+                    GameObject go = await _kindedInstantiator.InstantiateAsync(kind, cts.Token);
+                    // Cancelled while the object was loading: destroy it and bail.
+                    if (cts.IsCancellationRequested)
+                    {
+                        _kindedInstantiator.Destroy(go);
+                        return;
+                    }
+                    go.transform.SetParent(content, false);
+                    item = NewItem(go);
+                    item.Kind = kind;
                 }
                 else if (_instantiator != null)
                 {
@@ -426,10 +579,12 @@ namespace KidzDev.Unity.RecyclableScroll
                     }
                     go.transform.SetParent(content, false);
                     item = NewItem(go);
+                    item.Kind = kind;
                 }
                 else
                 {
-                    item = NewItem(Instantiate(itemPrefab, content));
+                    item = NewItem(Instantiate(ResolveKindPrefab(kind), content));
+                    item.Kind = kind;
                 }
 
                 if (item.transform.parent != content)
@@ -437,7 +592,6 @@ namespace KidzDev.Unity.RecyclableScroll
 
                 PlaceAndActivate(item, index);
 
-                int dataIndex = loop ? ToDataIndex(index) : index;
                 item.Index = dataIndex;
                 ReplaceActive(index, item);
 
@@ -476,7 +630,7 @@ namespace KidzDev.Unity.RecyclableScroll
             if (_active.TryGetValue(index, out RecyclableScrollItem existing) && existing != item)
             {
                 existing.gameObject.SetActive(false);
-                _pool.Push(existing);
+                GetPool(existing.Kind).Push(existing);
             }
             _active[index] = item;
         }
@@ -501,7 +655,7 @@ namespace KidzDev.Unity.RecyclableScroll
             if (!_active.TryGetValue(index, out RecyclableScrollItem item)) return;
             _active.Remove(index);
             item.gameObject.SetActive(false);
-            _pool.Push(item);
+            GetPool(item.Kind).Push(item);
         }
 
         private void RecycleAll()

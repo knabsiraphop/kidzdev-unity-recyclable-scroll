@@ -140,6 +140,25 @@ namespace KidzDev.Unity.RecyclableScroll
             scrollView.ScrollToIndex(index);
         }
 
+        /// <summary>
+        /// Call after appending items to the end of the current data source. See
+        /// <see cref="RecyclableScrollView.AppendData"/>.
+        /// </summary>
+        public void AppendData()
+        {
+            scrollView.AppendData();
+        }
+
+        /// <summary>
+        /// Call after inserting <paramref name="count"/> items at the front of the current data
+        /// source. Keeps the currently visible content pinned on screen. See
+        /// <see cref="RecyclableScrollView.PrependData"/>.
+        /// </summary>
+        public void PrependData(int count)
+        {
+            scrollView.PrependData(count);
+        }
+
         // -------------------------------------------------------------------------
         // Scrollbar sync
         // -------------------------------------------------------------------------

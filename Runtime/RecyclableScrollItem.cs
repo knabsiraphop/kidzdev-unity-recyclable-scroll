@@ -13,6 +13,13 @@ namespace KidzDev.Unity.RecyclableScroll
         public int Index { get; internal set; }
 
         /// <summary>
+        /// Kind id this item was instantiated for (see <see cref="IKindedDataSource"/>). Always 0
+        /// for non-kinded data sources. Used internally to keep recycled instances of different
+        /// kinds in separate pools — never re-bind an item to a different kind.
+        /// </summary>
+        public int Kind { get; internal set; }
+
+        /// <summary>
         /// Called by the view after <see cref="Index"/> has been assigned and the
         /// data source has bound this item. Override to update visuals.
         /// </summary>

@@ -5,6 +5,31 @@ All notable changes to this package are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-07-12
+
+### Added
+
+- **Item kinds**: `IKindedDataSource` (extends `IRecyclableDataSource` with `GetItemKind(int index)`)
+  and `IKindedItemInstantiator` (kind-aware counterpart to `IItemInstantiator`) let a single view mix
+  multiple item shapes — e.g. a chat feed with text/sticker/system rows — instead of one shared
+  `itemPrefab`. `RecyclableScrollView` gains a `kindPrefabs` inspector array (indexed by
+  `GetItemKind`; kind `0` always resolves to `itemPrefab`, so existing non-kinded consumers are
+  unaffected) and pools recycled items per kind. `RecyclableScrollItem.Kind` reports which kind an
+  item was instantiated for. New `SetDataSource(IRecyclableDataSource, IKindedItemInstantiator)`
+  overload assigns an explicit kind-aware instantiator; a missing `kindPrefabs` entry for a kind
+  logs once and falls back to `itemPrefab` rather than hard-failing.
+- **Prepend/append with scroll anchor**: `RecyclableScrollView.AppendData()` re-layouts after items
+  are appended to the end of the data source without disturbing already-realized items — for
+  live-appended content (e.g. new chat messages). `RecyclableScrollView.PrependData(int count)`
+  re-layouts after items are inserted at the front and shifts the scroll position so already-visible
+  content stays pinned on screen — no visual jump when older content (e.g. paged-in chat history) is
+  loaded and prepended. `PrependData` falls back to `Refresh()` in loop mode or when there was no
+  prior content to anchor against. Both are also exposed as passthroughs on
+  `RecyclableScrollController` (`AppendData()`, `PrependData(int count)`).
+- `RecyclableScrollKindedPlayTests` and `RecyclableScrollPrependAppendPlayTests` (PlayMode, 6 tests
+  each): coverage for per-kind pooling/instantiation and for prepend/append re-layout and scroll
+  anchoring.
+
 ## [0.4.1] - 2026-06-20
 
 ### Fixed
