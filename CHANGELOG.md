@@ -5,6 +5,18 @@ All notable changes to this package are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-07-14
+
+### Added
+
+- `RecyclableScrollView.LinearItemCrossSize`: public read-only property exposing the cross-axis
+  size every linear (non-grid) item root is stretched to by the layout — viewport cross size minus
+  both cross-axis paddings. Lets a data source measure content (e.g. text wrap width) against the
+  exact width its item will actually render at, instead of duplicating the padding math itself.
+- `RecyclableScrollView.GetPrefabForKind(int kind)`: public read-only lookup of the prefab a given
+  `IKindedDataSource` kind resolves to, for consumers that need to inspect the prefab asset itself
+  (e.g. to measure a child's layout) without instantiating it.
+
 ## [0.5.0] - 2026-07-12
 
 ### Added

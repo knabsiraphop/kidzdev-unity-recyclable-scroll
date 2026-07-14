@@ -341,7 +341,20 @@ namespace KidzDev.Unity.RecyclableScroll
             mainLeadingPad: MainLeadingPad,
             mainTrailingPad: MainTrailingPad,
             crossLeadingPad: CrossLeadingPad,
-            crossExtent: Mathf.Max(0f, ViewportCross - CrossLeadingPad - CrossTrailingPad));
+            crossExtent: ViewportCross - CrossLeadingPad - CrossTrailingPad);
+
+        /// <summary>The cross-axis size every linear (non-grid) item root is stretched to by
+        /// <see cref="PositionItem"/> — viewport cross size minus both cross-axis paddings. 0 until
+        /// the viewport has a valid rect (e.g. before the first layout pass). Exposed so a data
+        /// source can measure content (e.g. text wrap width) against the exact width its item will
+        /// actually render at, instead of duplicating this padding math.
+        /// <para><b>Axis warning:</b> "cross-axis" means the item's <c>RectTransform.rect.width</c>
+        /// when <see cref="orientation"/> is <see cref="Orientation.Vertical"/> (the item stretches
+        /// horizontally), but its <c>rect.height</c> when <see cref="Orientation.Horizontal"/> (the
+        /// item stretches vertically instead). A caller measuring an item's on-screen width must
+        /// account for this — this value is only interchangeable with "item width" for a vertical
+        /// scroll view.</para></summary>
+        public float LinearItemCrossSize => BuildMetrics().CrossExtent;
 
         // --- virtual-index helpers (loop) ------------------------------------
         //
@@ -501,6 +514,12 @@ namespace KidzDev.Unity.RecyclableScroll
                 Debug.LogError($"RecyclableScrollView: no kindPrefabs entry for kind {kind}; falling back to itemPrefab.", this);
             return itemPrefab;
         }
+
+        /// <summary>Public read-only lookup of the prefab a given <see cref="IKindedDataSource"/>
+        /// kind resolves to, for consumers that need to inspect the prefab asset itself (e.g. to
+        /// measure a child's layout) without instantiating it. Same kind-0/fallback semantics as
+        /// the internal resolver this wraps.</summary>
+        public GameObject GetPrefabForKind(int kind) => ResolveKindPrefab(kind);
 
         // Allocation-free realize+bind for fully synchronous data sources.
         private void AcquireSync(int index)
